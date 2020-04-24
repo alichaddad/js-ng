@@ -76,6 +76,7 @@ js-ext
 """
 
 
+import lazy_import
 import collections
 import importlib
 import importlib.util
@@ -122,9 +123,11 @@ def loadjsmodules():
                     continue
                 importedpkgstr = "jumpscale.{}.{}".format(rootbase, pkgname)
                 __all__.append(importedpkgstr)
-                # globals()[importedpkgstr] = lazy_import.lazy_module(importedpkgstr)
+                #globals()[importedpkgstr] = lazy_import.lazy_module(importedpkgstr)
+                
                 try:
-                    m = importlib.import_module(importedpkgstr)
+                    #m = importlib.import_module(importedpkgstr)
+                    m = lazy_import.lazy_module(importedpkgstr)
                 except Exception as e:
                     traceback.print_exception(*sys.exc_info())
                     print("[-] {} at {} ".format(e, importedpkgstr))
