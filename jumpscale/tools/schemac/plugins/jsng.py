@@ -27,6 +27,7 @@ types_map = {
     "iprange": "IPAddress",
     "json": "Json",
     "bytes": "Bytes",
+    "I64": "Float",
 }
 
 
@@ -35,7 +36,7 @@ def get_prop_line(prop):
     python_type = types_map.get(prop_type)
     line = f"{prop.name} = "
 
-    # print(f"\n\n{prop.name} => {prop} \n\n")
+    print(f"\n\n{prop.name} => {prop} \n\n")
     # primitive with a default or not.
     if prop_type == "E":
         line += f"fields.{python_type}({prop.name.capitalize()})"
@@ -71,6 +72,8 @@ def get_prop_line(prop):
         line += f"fields.Json()"
     elif prop_type == "bytes":
         line += f"fields.Bytes()"
+    elif prop_type == "I64":
+        line += f"fields.Float()"
     else:
         line += f"fields.{python_type}()"
 

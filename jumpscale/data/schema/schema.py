@@ -63,10 +63,10 @@ class Schema:
 
 def _normalize_string(text):
     """Trims the text, removes all the spaces from text and replaces every sequence of lines with a single line.
-    
+
     Args:
         text (str): The schema definition.
-    
+
     Returns:
         str: The normalized text.
     """
@@ -98,10 +98,10 @@ def _normalize_string(text):
 
 def _correct_url_number(text):
     """Checks that the schema definition contains only one url definition.
-    
+
     Args:
         text (str): The schema definition.
-    
+
     Returns:
         bool: Whether only one url is defined.
     """
@@ -111,10 +111,10 @@ def _correct_url_number(text):
 
 def _parse_system_prop(line):
     """Returns the name and value of a system property (The line is preceded by @).
-    
+
     Args:
         line (str): The definition of the system property.
-    
+
     Returns:
         str, str: Pair of name, value.
     """
@@ -123,10 +123,10 @@ def _parse_system_prop(line):
 
 def _name_in_correct_form(name):
     """Checks whether the name is a sequence of alphanumberic characters and _ and starts with _.
-    
+
     Args:
         name (str): The name of the property.
-    
+
     Returns:
         bool: True if the name is well formed. False otherwise.
     """
@@ -135,10 +135,10 @@ def _name_in_correct_form(name):
 
 def _is_float(value):
     """Checks if the value is float. Which means it contains two non empty integer parts separated by .
-    
+
     Args:
         value (str): The value.
-    
+
     Returns:
         bool: True if the value represents a float.
     """
@@ -156,13 +156,13 @@ def _infer_type(value):
     3. string: nonempty sequence of characters inside " or '
     4. bool: literals true or false.
     5. list: equals surrounded by [].
-    
+
     Args:
         value (str): The value which the type is infered from.
-    
+
     Raises:
         RuntimeError: If no types can be infered
-    
+
     Returns:
         str: The type of the value.
     """
@@ -182,13 +182,13 @@ def _infer_type(value):
 
 def _parse_prop(line):
     """Parses a line which defines a property.
-    
+
     Args:
         line (str): The property description.
-    
+
     Raises:
         RuntimeError: If the description is malformed.
-    
+
     Returns:
         str, Property: Name of the property and Property object defining the property.
     """
@@ -227,13 +227,13 @@ def _parse_prop(line):
 
 def parse_schema(text):
     """Parses a schema from string.
-    
+
     Args:
         text (str): The schema definition.
-    
+
     Raises:
         RuntimeError: Thrown when the schema can't be parsed.
-    
+
     Returns:
         Schema: Schema object representing the schema.
     """
@@ -246,8 +246,16 @@ def parse_schema(text):
         if line.startswith("@"):
             name, value = _parse_system_prop(line)
             schema.system_props[name] = value
+        elif line.startswith("#") or not line.strip():
+            continue
         else:
-            name, prop = _parse_prop(line)
+            try:
+                name, prop = _parse_prop(line)
+            except Exception as e:
+                import ipdb
+
+                ipdb.set_trace()
+                print(line, e)
             schema.props[name] = prop
     schema.url = schema.system_props["url"]
     return schema

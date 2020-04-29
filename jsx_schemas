@@ -1,0 +1,378 @@
+@url = tfgrid.deployed_reservation.1
+#reservation object that has been deployed through the current machine
+reservation_id = (I)
+#tid of the logged in user that creates/pays for the reservation
+customer_tid  = (I)
+#is the location, 1 specific farm
+@url = tfgrid.directory.farm.1
+threebot_id** = (I)
+iyo_organization = (S) # for backward compatibility
+name** = (S)
+wallet_addresses = (LO) !tfgrid.directory.wallet_address.1
+location = (O) !tfgrid.directory.location.1
+email = (email)
+resource_prices = (LO) !tfgrid.directory.node.resource.price.1
+# original /48 allocation of the farm
+prefix_zero = (iprange)
+
+@url = tfgrid.directory.wallet_address.1
+asset = (S)
+address = (S)
+
+
+@url = tfgrid.directory.node.resource.price.1
+currency = "EUR,USD,TFT,AED,GBP" (E)
+cru = (F)
+mru = (F)
+hru = (F)
+sru = (F)
+nru = (F)
+
+@url = tfgrid.directory.gateway.1
+node_id** = (S)
+os_version** = (S)
+farm_id** = (I)
+created = (T)
+updated = (T)
+uptime = (I)
+address = (S)
+location = (O) !tfgrid.directory.location.1
+public_key_hex = "" (S)     #hex representation of public key of the TF node
+workloads = (O) !tfgrid.directory.node.resource.workloads.1
+managed_domains = (LS)
+tcp_router_port = (I) # port on which the tcp router client needs to connect to
+dns_nameserver = (LS) # A user needs to know how he needs to configure its DNS record to let TFGW serve subdomain of the user domain nameserver IPs
+free_to_use = (B)
+@url = tfgrid.directory.location.1
+city = (S)
+country = (S)
+continent = (S)
+latitude = (F)
+longitude = (F)
+@url = tfgrid.directory.node.2
+node_id** = (S)
+node_id_v1 = (S)
+farm_id** = (I)
+os_version** = (S)
+#parameters = (dict)
+created = (T)
+updated = (T)
+uptime = (I)
+address = (S)
+location = (O) !tfgrid.directory.location.1
+total_resources = (O) !tfgrid.directory.node.resource.amount.1
+used_resources = (O) !tfgrid.directory.node.resource.amount.1
+reserved_resources = (O) !tfgrid.directory.node.resource.amount.1
+workloads = (O)!tfgrid.directory.node.resource.workloads.1
+proofs = (LO) !tfgrid.directory.node.proof.1
+ifaces = (LO) !tfgrid.directory.node.iface.1
+public_config = (O)!tfgrid.directory.node.public_iface.1
+exit_node = (B)
+approved = false (B)
+public_key_hex = "" (S)     #hex representation of public key of the TF node
+wg_ports = (LI)
+free_to_use = (B)
+
+#following info is not usable for provisioning, its convenience info for the farmer
+#e.g. to know which interface names there are
+#is only the physical interfaces where a cable is attached (INFO ONLY)
+@url = tfgrid.directory.node.iface.1
+name = (S)
+addrs = (Liprange)
+gateway = (Lipaddr)
+
+#famer configures this information so we know how to configure the ipaddress
+@url = tfgrid.directory.node.public_iface.1
+master = (S) #physical interface name on which the vlan lives
+type = "macvlan,vlan" (E)
+ipv4 = (iprange)
+ipv6 = (iprange)
+gw4 = (ipaddr)
+gw6 = (ipaddr)
+version = (I)
+
+
+@url = tfgrid.directory.node.resource.amount.1
+cru** = (I)
+mru** = (I)
+hru** = (I)
+sru** = (I)
+
+@url = tfgrid.directory.node.resource.workloads.1
+network = (I)
+volume = (I)
+zdb_namespace = (I)
+container = (I)
+k8s_vm = (I)
+proxy = (I)
+reverse_proxy = (I)
+subdomain = (I)
+delegate_domain = (I)
+
+@url = tfgrid.directory.node.proof.1
+created = (T)
+hardware_hash = (S)
+disk_hash = (S)
+hardware = (dict)
+disks = (dict)
+hypervisor = (LS)
+@url = tfgrid.domains.delegate.1
+gateway = (O) !tfgrid.directory.gateway.1
+domain = (S)
+
+@url = tfgrid.domains.sub.1
+gateway_id = (O) !tfgrid.directory.gateway.1
+subdomain = (S)
+domain = (S)
+@url = tfgrid.phonebook.user.1
+@acl = false
+name** = ""                              #e.g. kristof.ibiza or kristof.3bot
+email** = ""                             #optional, not required
+pubkey = ""                             #public key of the 3bot
+host = ""                             #how to reach the digitalme (3bot)
+description = ""                        #optional
+signature = ""                          #proof that content is ok, is on id+name+email+pubkey+ipaddress+description
+@url = tfgrid.workload.actionable.1
+workload_id** = (S)
+node_id** = (S)
+
+@url = tfgrid.workloads.reservation.1
+#json of the reservation.data object, will not change over time
+json = "" (S)
+data_reservation = (O) !tfgrid.workloads.reservation.data.1
+#id of threebot which pays for it
+customer_tid = (I)
+#signature with private key of customer of the json, this guarantees that the data did not change
+customer_signature = (S)
+#state, allows anyone to see what can happen next e.g. sign means waiting for everyone to sign
+#delete means its deployed now we need to wait till enough people sign to delete
+next_action = "create,sign,pay,deploy,delete,invalid,deleted" (E)
+signatures_provision = (LO) !tfgrid.workloads.reservation.signing.signature.1
+signatures_farmer = (LO) !tfgrid.workloads.reservation.signing.signature.1
+signatures_delete = (LO) !tfgrid.workloads.reservation.signing.signature.1
+epoch = (T)
+metadata = (S)
+results = (LO) !tfgrid.workloads.reservation.result.1
+
+@url = tfgrid.workloads.reservation.data.1
+#this one does not change over time
+description = "" (S)
+#need toget to consensus
+signing_request_provision = (O) !tfgrid.workloads.reservation.signing.request.1
+signing_request_delete = (O) !tfgrid.workloads.reservation.signing.request.1
+containers = (LO) !tfgrid.workloads.reservation.container.1
+volumes = (LO) !tfgrid.workloads.reservation.volume.1
+zdbs = (LO) !tfgrid.workloads.reservation.zdb.1
+networks = (LO) !tfgrid.workloads.reservation.network.1
+kubernetes = (LO) !tfgrid.workloads.reservation.k8s.1
+proxies = (LO) !tfgrid.workloads.reservation.gateway.proxy.1
+reserve_proxies = (LO) !tfgrid.workloads.reservation.gateway.reserve_proxy.1
+subdomains = (LO) !tfgrid.workloads.reservation.gateway.subdomain.1
+domain_delegates = (LO) !tfgrid.workloads.reservation.gateway.delegate.1
+gateway4to6 = (LO) !tfgrid.workloads.reservation.gateway4to6.1
+#till whe is request for provisioning valid, if not signed in required time then obsolete
+expiration_provisioning = (T)
+#till whe is reservation valid
+expiration_reservation = (T)
+# list of currency the user is able to pay with
+currencies = (LS)
+
+@url = tfgrid.workloads.reservation.signing.request.1
+#part of the reservation.data, because should never be possible to delete this
+#threebotids of people who can sign
+signers = (LI)
+#min nr of people who need to sign
+quorum_min = (I)
+
+@url = tfgrid.workloads.reservation.signing.signature.1
+#threebotid
+tid = (I)
+#signature in string form of the json as stored in the root of this obj
+signature = (S)
+#time of signature
+epoch = (T)
+
+@url = tfgrid.workloads.reservation.create.1
+reservation_id = (I)
+escrow_information = (O) !tfgrid.workloads.reservation.escrow.1
+
+@url = tfgrid.workloads.reservation.escrow.1
+address = (S)
+asset = (S) # the token asset code of the currency the reservation needs to be paid with
+details = (LO) !tfgrid.workloads.reservation.escrow.detail.1
+
+@url = tfgrid.workloads.reservation.escrow.detail.1
+farmer_id  = (I)
+total_amount = (I64)
+
+
+@url = tfgrid.workloads.reservation.container.1
+#unique id inside the reservation is an autoincrement
+workload_id = (I)
+#links to unique node on the TFGrid
+node_id = (S)
+flist = (S)
+hub_url = (S)
+#env variables
+environment = (dict)
+#secret_env variables. the key is in plain text but the value
+#must be encrypted using Curve25519 with the public key of node.
+#then hex encoded.
+secret_environment = (dict)
+#the process to start
+entrypoint = (S)
+#corex yes or no
+interactive = true (B)
+volumes = (LO) !tfgrid.workloads.reservation.container.mount.1
+network_connection = (LO) !tfgrid.workloads.reservation.network.connection.1
+#where to send the statistics too
+stats_aggregator = (LO) !tfgrid.workloads.reservation.statsaggregator.1
+#id of threebot who is the farmer
+farmer_tid = (I)
+capacity = (O) !tfgrid.workloads.reservation.container.capacity.1
+
+
+
+@url = tfgrid.workloads.reservation.container.mount.1
+volume_id = (S)
+mountpoint = (S)
+
+@url = tfgrid.workloads.reservation.network.connection.1
+network_id = (S)
+ipaddress = (ipaddress)
+public_ip6 = (B)
+
+@url = tfgrid.workloads.reservation.container.capacity.1
+# Number of vCPU
+cpu = (I)
+# memory in MiB
+memory = (I)
+@url = tfgrid.workloads.reservation.gateway.proxy.1
+workload_id = (I)
+node_id = (S)
+domain = (S)
+addr = (S) # destination address
+port = (I) #
+port_tls = (I)
+
+@url = tfgrid.workloads.reservation.gateway.reserve_proxy.1
+workload_id = (I)
+node_id = (S)
+domain = (S)
+secret = (S) # the secret used by tcp router client. format must be 'threebotid:random_secret'
+
+@url = tfgrid.workloads.reservation.gateway.subdomain.1
+workload_id = (I)
+node_id = (S)
+domain = (S) # full domain. e.g: `user1.tfgw1.io`
+ips = (LS) # list of target IP
+
+@url = tfgrid.workloads.reservation.gateway.delegate.1
+workload_id = (I)
+node_id = (S)
+domain = (S)
+
+@url = tfgrid.workloads.reservation.gateway4to6.1
+workload_id = (I)
+node_id = (S)
+public_key = (S) the wireguard public key of the user@url = tfgrid.workloads.reservation.k8s.1
+#unique id inside the reservation is an autoincrement
+workload_id = (I)
+#links to unique node on the TFGrid
+node_id = (S)
+# defines the amount of vCpu, memory, and the disk size
+# size 1: 1 vCpu, 2 GiB RAM, 50 GB disk
+# size 2: 2 vCpu, 4 GiB RAM, 100 GB disk
+size = (I)
+network_id = (S)
+ipaddress = (ipaddress)
+# ClusterSecret is the hex encoded encrypted cluster secret
+cluster_secret = (S)
+# master_ips define the URL's for the kubernetes master nodes. If this
+# list is empty, this node is considered to be a master node.
+master_ips = (Lipaddress)
+# list of public ssh keys to add to the VM
+ssh_keys = (LS)
+#where to send the statistics too
+stats_aggregator = (LO) !tfgrid.workloads.reservation.statsaggregator.1
+#id of threebot who is the farmer
+farmer_tid = (I)@url = tfgrid.workloads.reservation.network.1
+name** = "" (S)
+#unique id inside the reservation is an autoincrement (USE AS NET_ID)
+workload_id = (I)
+iprange = "10.10.0.0/16" (iprange)
+#where to send the statistics too
+stats_aggregator = (LO) !tfgrid.workloads.reservation.statsaggregator.1
+network_resources = (LO) !tfgrid.workloads.network.net_resource.1
+farmer_tid = (I)
+
+
+@url = tfgrid.workloads.network.net_resource.1
+node_id = (S)
+wireguard_private_key_encrypted = "" (S)  # hex encoded encrypted with public key of the node, generated by the tfgrid customer
+wireguard_public_key = "" (S)
+wireguard_listen_port = (I)
+iprange = "10.10.10.0/24" (iprange)       # the wireguard has always nr 1 in the iprange, needs to correspond with container
+peers = (LO) !tfgrid.workloads.wireguard.peer.1
+
+@url = tfgrid.workloads.wireguard.peer.1
+public_key = "" (S)
+allowed_iprange = "" (Liprange)     # is the the same as iprange in the net_resource
+endpoint = "" (S)                   # optional, only needed to connect out
+iprange = "10.10.11.0/24" (iprange)
+
+
+
+#### ipv4 fake class B address definition per network
+#json representation of whatever needs to come back from the ZOS after provisioning
+@url = tfgrid.workloads.reservation.result.1
+category = "zdb,container,volume,network,kubernetes,proxy,reverse-proxy,subdomain,domain-delegate,gateway4to6" (E)
+workload_id = (S)
+data_json = (json)
+#signature of the data (is e.g. json) by the zos node who deployed
+signature = (bytes)
+state = "error,ok,deleted" (E)
+message = "" (S)
+epoch = (T)
+
+@url = tfgrid.workloads.reservation.statsaggregator.1
+#ipaddress of redis aggregator, can be hostname or ipaddr, string for now
+addr = (S)
+port = (I)
+secret = (S)
+
+
+@url = tfgrid.workloads.reservation.volume.1
+#unique id inside the reservation is an autoincrement
+workload_id = (I)
+node_id = (S)
+size = (I)
+type = "HDD,SSD" (E)
+#where to send the statistics too
+stats_aggregator = (LO) !tfgrid.workloads.reservation.statsaggregator.1
+#id of threebot who is the farmer
+farmer_tid = (I)
+@url = tfgrid.workloads.reservation.workload.1
+workload_id = (S)
+user = (S)
+type = "zdb,container,volume,network,kubernetes,proxie,reserve_proxie,subdomain,domain_delegate" (E)
+content = (dict)
+created = (T)
+duration = (I)
+signature = (S)
+to_delete = (B)
+
+
+@url = tfgrid.workloads.reservation.zdb.1
+#unique id inside the reservation is an autoincrement
+workload_id = (I)
+node_id = (S)
+size = (I)
+mode = "seq,user" (E)
+password = (S)
+disk_type = "hdd,ssd" (E)
+public = false (B)
+#where to send the statistics too
+stats_aggregator = (LO) !tfgrid.workloads.reservation.statsaggregator.1
+#id of threebot who is the farmer
+farmer_tid = (I)

@@ -52,6 +52,8 @@ psutil = "^5.7.0"
 pudb = "^2019.1"
 python-digitalocean = "^1.15.0"
 snakeviz = "^2.0.1"
+base58 = "^2.0.0"
+stellar-sdk = "^2.3.2"
 
 [tool.poetry.dev-dependencies]
 ipdb = "^0.12.1"
@@ -73,4 +75,3 @@ jsync = "jumpscale.entry_points.jsync:cli"
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"
-
