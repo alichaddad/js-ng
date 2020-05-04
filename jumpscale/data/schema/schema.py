@@ -252,6 +252,10 @@ def parse_schema(text):
             try:
                 name, prop = _parse_prop(line)
             except Exception as e:
+                import traceback
+
+                traceback.print_exc()
+
                 import ipdb
 
                 ipdb.set_trace()

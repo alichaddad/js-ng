@@ -236,7 +236,9 @@ def get_js_type(type_str, default_value=None):
         return types[type_str](default_value)
     else:
         subtype = type_str[1:]
-        return List(default_value, get_js_type(subtype))
+        print(subtype, default_value)
+        default_value = default_value or "[]"
+        return []  # List(default_value, JSObject)
 
 
 class Email:
