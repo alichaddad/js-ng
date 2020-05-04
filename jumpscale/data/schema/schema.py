@@ -237,6 +237,7 @@ def parse_schema(text):
     Returns:
         Schema: Schema object representing the schema.
     """
+    print(f"parsing \n {text}")
     text = _normalize_string(text)
     if text.count("@url") != 1:
         raise RuntimeError("The number of urls must be equal to one.")

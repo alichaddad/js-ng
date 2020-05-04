@@ -187,10 +187,14 @@ class List:
         Returns:
             list: The parsed list.
         """
-        if isinstance(self.subtype, JSObject):
-            return value
-        else:
-            return self._deep_parse(ast.literal_eval(value))
+        print(f"from str-> value {value}")
+        print(f"subtype {self.subtype}")
+        return object()
+        # if isinstance(self.subtype, JSObject):
+        #     print("returning noww")
+        #     return object()
+        # else:
+        #     return self._deep_parse(ast.literal_eval(value))
 
 
 def get_js_type(type_str, default_value=None):
@@ -237,8 +241,7 @@ def get_js_type(type_str, default_value=None):
     else:
         subtype = type_str[1:]
         print(subtype, default_value)
-        default_value = default_value or "[]"
-        return []  # List(default_value, JSObject)
+        return List(default_value, JSObject)
 
 
 class Email:

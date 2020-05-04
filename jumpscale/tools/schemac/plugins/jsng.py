@@ -50,8 +50,8 @@ def get_prop_line(prop):
         line += f" fields.List(fields.Object())"
     elif python_type == "L" and prop.defaultvalue:
         line += f" fields.List(fields.Object({prop.defaultvalue}))"
-    elif len(prop_type) > 1 and prop_type[0] == "L" and prop_type[1] != "O":
-        line += f"fields.{python_type}(fields.{types_map[prop_type[1:]]}())"
+    elif len(prop_type) > 1 and prop_type[0] == "L":
+        line += f"fields.List(fields.{types_map[prop_type[1:]]}())"
     elif prop_type in ["I", "F", "B"] and not prop.defaultvalue:
         line += f"fields.{python_type}()"
     elif prop_type in ["I", "F", "B"] and prop.defaultvalue:
@@ -65,7 +65,7 @@ def get_prop_line(prop):
     elif prop_type == "email":
         line += f"fields.Email()"
     elif prop_type in ["ipaddress", "ipaddr", "iprange"] and prop.defaultvalue:
-        line += f"fields.IPAddress(default={prop.defaultvalue})"
+        line += f'fields.IPAddress(default="{prop.defaultvalue})"'
     elif prop_type in ["ipaddress", "ipaddr", "iprange"] and not prop.defaultvalue:
         line += f"fields.IPAddress()"
     elif prop_type == "json":
