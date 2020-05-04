@@ -35,8 +35,7 @@ def get_prop_line(prop):
     prop_type = prop.prop_type
     python_type = types_map.get(prop_type)
     line = f"{prop.name} = "
-
-    print(f"\n\n{prop.name} => {prop} \n\n")
+    # print(f"\n\n{prop.name} => {prop} \n\n")
     # primitive with a default or not.
     if prop_type == "E":
         line += f"fields.{python_type}({prop.name.capitalize()})"

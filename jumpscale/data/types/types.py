@@ -187,8 +187,8 @@ class List:
         Returns:
             list: The parsed list.
         """
-        print(f"from str-> value {value}")
-        print(f"subtype {self.subtype}")
+        # print(f"from str-> value {value}")
+        # print(f"subtype {self.subtype}")
         return object()
         # if isinstance(self.subtype, JSObject):
         #     print("returning noww")
@@ -240,8 +240,8 @@ def get_js_type(type_str, default_value=None):
         return types[type_str](default_value)
     else:
         subtype = type_str[1:]
-        print(subtype, default_value)
-        return List(default_value, JSObject)
+        # print(subtype, default_value)
+        return List(default_value, object)
 
 
 class Email:
