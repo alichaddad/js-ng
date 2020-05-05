@@ -1,6 +1,7 @@
 from jumpscale.core.exceptions import Input
 from .crypto import encrypt_for_node
 from .id import _next_workload_id
+from jumpscale.clients.explorer.models import TfgridWorkloadsReservationK8s1
 
 
 class Kubernetes:
@@ -11,7 +12,7 @@ class Kubernetes:
         """Add a master node to a kubernets cluster
 
         Args:
-            reservation ([type]): reservation object
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation object
             node_id (str): Id of the node to be added
             network_name (str): name of the network to join
             cluster_secret (str): Secret of the cluster to be joined
@@ -23,12 +24,12 @@ class Kubernetes:
             jumpscale.core.exceptions.Input: If size is not supported
 
         Returns:
-            [type]: Master node
+            from jumpscale.clients.explorer.models.TfgridWorkloadsReservationK8s1: Master node
         """
         if size not in [1, 2]:
             raise Input("size can only be 1 or 2")
 
-        master = reservation.data_reservation.kubernetes.new()
+        master = TfgridWorkloadsReservationK8s1()
         master.node_id = node_id
         master.workload_id = _next_workload_id(reservation)
 
@@ -41,13 +42,14 @@ class Kubernetes:
             ssh_keys = [ssh_keys]
         master.ssh_keys = ssh_keys
 
+        reservation.data_reservation.kubernetes.append(master)
         return master
 
     def add_worker(self, reservation, node_id, network_name, cluster_secret, ip_address, size, master_ip, ssh_keys=[]):
         """Add a worker node to a kubernets cluster
 
         Args:
-            reservation ([type]): reservation object
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation object
             node_id (str): Id of the node to be added
             network_name (str): name of the network to join
             cluster_secret (str): Secret of the cluster to be joined

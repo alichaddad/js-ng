@@ -504,4 +504,3 @@ class TfgridWorkloadsReservationZdb1(Base):
     public = fields.Boolean(default=false)
     stats_aggregator = fields.List(fields.Object(TfgridWorkloadsReservationStatsaggregator1))
     farmer_tid = fields.Integer()
-

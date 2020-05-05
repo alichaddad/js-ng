@@ -1,5 +1,6 @@
 from .id import _next_workload_id
 from jumpscale.core.exceptions import Input
+from jumpscale.clients.explorer.models import TfgridWorkloadsReservationVolume1
 
 
 class Volumes:
@@ -7,7 +8,7 @@ class Volumes:
         """add a volume to the reservation
 
         Args:
-            reservation ([type]): reservation to add the volume to
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation to add the volume to
             node_id (str): id of the node where to reserve the volume
             size (int, optional): size in GiB. Defaults to 5.
             type (str, optional): type of disk to use. Can be SSD or HDD. Defaults to "HDD".
@@ -22,11 +23,12 @@ class Volumes:
         if type not in ["SSD", "HDD"]:
             raise Input("volume type can only be SSD or HDD")
 
-        volume = reservation.data_reservation.volumes.new()
+        volume = TfgridWorkloadsReservationVolume1()
         volume.workload_id = _next_workload_id(reservation)
         volume.size = size
         volume.type = type
         volume.node_id = node_id
+        reservation.data_reservation.volumes.append(volume)
         return volume
 
     def attach(self, container, volume, mount_point):

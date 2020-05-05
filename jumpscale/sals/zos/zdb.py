@@ -1,6 +1,7 @@
 from .crypto import encrypt_for_node
 from jumpscale.core.exceptions import Input
 from .id import _next_workload_id
+from jumpscale.clients.explorer.models import TfgridWorkloadsReservationZdb1
 
 
 class ZDB:
@@ -11,7 +12,7 @@ class ZDB:
         """add a 0-db namespace workload to the reservation
 
         Args:
-            reservation ([type]): reservation obejct to add the volume to
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation obejct to add the volume to
             node_id (str): id of the node to reserve the volume
             size (int): size of the namespace in GiB
             mode (str): mode of the 0-db, can be 'seq' or 'user'
@@ -31,7 +32,7 @@ class ZDB:
         if mode not in ["seq", "user"]:
             raise Input("mode can only be 'seq' or 'user'")
 
-        zdb = reservation.data_reservation.zdbs.new()
+        zdb = TfgridWorkloadsReservationZdb1()
         zdb.workload_id = _next_workload_id(reservation)
         zdb.node_id = node_id
         zdb.size = size
@@ -40,4 +41,5 @@ class ZDB:
             node = self._nodes.get(node_id)
             zdb.password = encrypt_for_node(node.public_key_hex, password)
         zdb.disk_type = disk_type.lower()
+        reservation.data_reservation.zdbs.append(zdb)
         return zdb

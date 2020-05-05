@@ -5,7 +5,7 @@ def get_page(session, page, model, url, query=None):
     resp = session.get(url, params=query)
     output = []
     for data in resp.json():
-        obj = model.new(datadict=data)
+        obj = model.from_dict(data)
         output.append(obj)
     pages = int(resp.headers.get("Pages", 0))
     return output, pages

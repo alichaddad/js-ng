@@ -16,15 +16,41 @@ class NodeFinder:
         ago = now().timestamp - (60 * 10)
         return node.updated > ago
 
+    def filter_is_free_to_use(self, node):
+        return node.free_to_use
+
+    def filter_is_not_free_to_use(self, node):
+        return not node.free_to_use
+
     def filter_public_ip4(self, node):
         return filter_public_ip(node, 4)
 
     def filter_public_ip6(self, node):
         return filter_public_ip(node, 6)
 
+    def filter_farm_currency(self, farm, currency):
+        if currency and currency != "FreeTFT":
+            # check if farm support this currency
+            for wallet in farm.wallet_addresses:
+                if wallet.asset == currency:
+                    return True
+            return False
+        return True
+
     def nodes_by_capacity(
-        self, farm_id=None, farm_name=None, country=None, city=None, cru=None, sru=None, mru=None, hru=None
+        self,
+        farm_id=None,
+        farm_name=None,
+        country=None,
+        city=None,
+        cru=None,
+        sru=None,
+        mru=None,
+        hru=None,
+        currency=None,
     ):
+
+        not_supported_farms = []
         nodes = self.nodes_search(farm_id=farm_id, farm_name=farm_name, country=country, city=city)
         for node in nodes:
             total = node.total_resources
@@ -41,6 +67,20 @@ class NodeFinder:
             if hru and total.hru - max(0, reserved.hru) < hru:
                 continue
 
+            if currency:
+                if currency == "FreeTFT":
+                    if node.free_to_use:
+                        yield node
+                    continue
+                elif currency != "FreeTFT" and node.free_to_use:
+                    continue
+                if node.farm_id in not_supported_farms:
+                    continue
+                farm = self._farms.get(node.farm_id)
+                if not self.filter_farm_currency(farm, currency):
+                    not_supported_farms.append(node.farm_id)
+                    continue
+
             yield node
 
     def nodes_search(
@@ -55,27 +95,28 @@ class NodeFinder:
         return self._nodes.list(farm_id=farm_id, country=country, city=city, cru=cru, sru=sru, mru=mru, hru=hru)
 
 
+def is_public_ip(ip, version):
+    try:
+        network = netaddr.IPNetwork(ip)
+    except netaddr.AddrFormatError:
+        return False
+    if network.version != version:
+        return False
+    return not is_private(ip)
+
+
 def filter_public_ip(node, version):
     if version not in [4, 6]:
-        raise Input("ip version can only be 4 or 6")
+        raise j.exceptions.Input("ip version can only be 4 or 6")
 
-    ips = []
-
-    # gather all the public ip of the requried version in ips
     if node.public_config and node.public_config.master:
         if version == 4:
-            ips = [node.public_config.ipv4]
-        else:
-            ips = [node.public_config.ipv6]
+            return is_public_ip(node.public_config.ipv4, 4)
+        elif node.public_config.ipv6:
+            return is_public_ip(node.public_config.ipv6, 6)
     else:
         for iface in node.ifaces:
             for addr in iface.addrs:
-                ip = netaddr.IPNetwork(addr)
-                if ip.version != version:
-                    continue
-                ips.append(ip)
-    # check if any of the ips is public
-    for ip in ips:
-        if not is_private(ip):
-            return True
+                if is_public_ip(addr, version):
+                    return True
     return False

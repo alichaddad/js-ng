@@ -1,57 +1,38 @@
-from .resource import ResourceParser
+from stellar_sdk.exceptions import BadRequestError
+from decimal import Decimal
+
+# TFT_ISSUER on production
+TFT_ISSUER_PROD = "GBOVQKJYHXRR3DX6NOX2RRYFRCUMSADGDESTDNBDS6CDVLGVESRTAC47"
+# TFT_ISSUER on testnet
+TFT_ISSUER_TEST = "GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3"
+ASSET_CODE = "TFT"
 
 
 class Billing:
-    def __init__(self, explorer):
-        self._explorer = explorer
-
-    def reservation_resources(self, reservation):
-        """compute how much resource units is reserved in the reservation
-
-        Args:
-            reservation ([type]): reservation object
-
-        Returns:
-            list: list of ResourceUnitsNode object
-        """
-        rp = ResourceParser(self._explorer, reservation)
-        return rp.calculate_used_resources()
-
-    def reservation_resources_cost(self, reservation):
-        """compute how much resource units is reserved in the reservation
-
-        Args:
-            reservation ([type]): reservation object
-
-        Returns:
-            list: list of ResourceUnitsNode object with costs filled in
-        """
-        rp = ResourceParser(self._explorer, reservation)
-        return rp.calculate_used_resources_cost()
-
-    def payout_farmers(self, client, reservation):
+    def payout_farmers(self, client, reservation_response):
         """payout farmer based on the resources per node used
 
         Args:
-            client ([type]): tfchain wallet or stellar client
-            reservation ([type]): reservation object
+            client (jumpscale.clients.stellar.stellar): stellar wallet client
+            reservation_response (jumpscale.clients.explorer.models.TfgridWorkloadsReservationCreate1): reservation create object
 
         Returns:
             list: list of transactions
         """
-        rp = ResourceParser(self._explorer, reservation)
-        costs = rp.calculate_used_resources_cost()
-        return rp.payout_farmers(client, costs, reservation.id)
+        # TODO check the wallet client use the right asset to pay the reservation
 
-    def verify_payments(self, client, reservation):
-        """verify that a reservation with a given ID has been paid for, for all farms belonging to the current user 3bot
+        transaction_hashes = []
+        reservation_id = reservation_response.reservation_id
+        asset = reservation_response.escrow_information.asset
+        total_amount = sum([d.total_amount for d in reservation_response.escrow_information.details])
+        total_amount = Decimal(total_amount) / Decimal(1e7)
+        total_amount = "{0:f}".format(total_amount)
 
-        Args:
-            client ([type]): tfchain wallet or stellar client
-            reservation ([type]): reservation object
+        escrow_address = reservation_response.escrow_information.address
+        try:
+            txhash = client.transfer(escrow_address, total_amount, asset=asset, memo_text=str(reservation_id))
+            transaction_hashes.append(txhash)
+        except BadRequestError as e:
+            raise e
 
-        Returns:
-            bool: True if the reservation has been fully funded for the farms owned by the current user 3bot
-        """
-        rp = ResourceParser(self._explorer, reservation)
-        return rp.validate_reservation_payment(client, reservation.id)
+        return transaction_hashes

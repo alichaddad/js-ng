@@ -6,6 +6,11 @@ from jumpscale.data.idgenerator import chars
 from jumpscale.core.exceptions import Input
 from jumpscale.tools.wireguard import generate_zos_keys
 from .id import _next_workload_id
+from jumpscale.clients.explorer.models import (
+    TfgridWorkloadsReservationNetwork1,
+    TfgridWorkloadsNetworkNet_resource1,
+    TfgridWorkloadsWireguardPeer1,
+)
 
 
 class Network:
@@ -31,7 +36,7 @@ class Network:
         """add a network into the reservation
 
         Args:
-            reservation ([type]): root reservation object, the network will be added to it
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1]): root reservation object, the network will be added to it
             ip_range (str): subnet of the network, it must have a network mask of /16
             network_name (str, optional): identifier of the network, if not specified a randon name will be generated. Defaults to None.
 
@@ -48,10 +53,11 @@ class Network:
         if network.prefixlen != 16:
             raise Input("network mask of ip range must be a /16")
 
-        network = reservation.data_reservation.networks.new()
+        network = TfgridWorkloadsReservationNetwork1()
         network.workload_id = _next_workload_id(reservation)
         network.name = network_name if network_name else chars(16)
         network.iprange = ip_range
+        reservation.data_reservation.networks.append(network)
         return network
 
     def add_node(self, network, node_id, ip_range, wg_port=None):
@@ -76,14 +82,14 @@ class Network:
 
         _, wg_private_encrypted, wg_public = generate_zos_keys(node.public_key_hex)
 
-        nr = network.network_resources.new()
+        nr = TfgridWorkloadsNetworkNet_resource1()
 
         nr.iprange = ip_range
         nr.node_id = node_id
         nr.wireguard_listen_port = wg_port
         nr.wireguard_public_key = wg_public
         nr.wireguard_private_key_encrypted = wg_private_encrypted
-
+        network.network_resources.append(nr)
         try:
             self._load_network(network)
             generate_peers(network)
@@ -294,21 +300,23 @@ def generate_peers(network):
                     allowed_ips.append(subnet)
                     allowed_ips.append(wg_routing_ip(subnet))
 
-            peer = nr.peers.new()
+            peer = TfgridWorkloadsWireguardPeer1()
             peer.iprange = str(onr.iprange)
             peer.endpoint = endpoint
             peer.allowed_iprange = [str(x) for x in allowed_ips]
             peer.public_key = onr.wireguard_public_key
+            nr.peers.append(peer)
 
         #  Add configured external access peers
         for ea in access_points.get(nr.node_id, []):
             allowed_ips = [str(ea.subnet), wg_routing_ip(ea.subnet)]
 
-            peer = nr.peers.new()
+            peer = TfgridWorkloadsWireguardPeer1()
             peer.iprange = ea.subnet
             peer.endpoint = ""
             peer.allowed_iprange = [str(x) for x in allowed_ips]
             peer.public_key = ea.wg_public_key
+            nr.peers.append(peer)
 
 
 def has_hidden_nodes(network):

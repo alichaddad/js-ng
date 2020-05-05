@@ -2,27 +2,30 @@ from .container import Container
 from .kubernetes import Kubernetes
 from .network import Network
 from .node_finder import NodeFinder
+from .gateway_finder import GatewayFinder
 from .volumes import Volumes
 from .zdb import ZDB
 from .billing import Billing
 from .gateway import Gateway
 from jumpscale.data.time import now
-from jumpscale.data.serializers.json import dump_to_file, load_from_file
+from jumpscale.data.serializers.json import dump_to_file, load_from_file, dumps, loads
 from jumpscale.data.nacl import payload_build
 from jumpscale.god import j
+from jumpscale.clients.explorer.models import TfgridWorkloadsReservation1
 
 
 class Zosv2:
     def __init__(self):
         self._explorer = j.clients.explorer.get("default")
         self._nodes_finder = NodeFinder(self._explorer)
+        self._gateways_finder = GatewayFinder(self._explorer)
         self._network = Network(self._explorer)
         self._container = Container()
         self._volume = Volumes()
         self._zdb = ZDB(self._explorer)
         self._kubernetes = Kubernetes(self._explorer)
-        self._billing = Billing(self._explorer)
-        self._gateway = Gateway(self._explorer)
+        self._billing = Billing()
+        self._gateway = Gateway()
 
     @property
     def network(self):
@@ -49,6 +52,10 @@ class Zosv2:
         return self._nodes_finder
 
     @property
+    def gateways_finder(self):
+        return self._gateways_finder
+
+    @property
     def billing(self):
         return self._billing
 
@@ -56,25 +63,32 @@ class Zosv2:
         """Creates a new empty reservation schema
 
         Returns:
-            [type]: reservation object
+            jumpscale.clients.explorer.models.TfgridWorkloadsReservation1: reservation object
         """
         return self._explorer.reservations.new()
 
     def reservation_register(
-        self, reservation, expiration_date, identity=None, expiration_provisioning=None, customer_tid=None
+        self,
+        reservation,
+        expiration_date,
+        identity=None,
+        expiration_provisioning=None,
+        customer_tid=None,
+        currencies=["TFT"],
     ):
-        """register a reservation in BCDB.
+        """register a reservation.
            If expiration_provisioning is specified and the reservation is not provisioning before expiration, it will never be provionned.
 
         Args:
-            reservation ([type]): reservation object
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation object
             expiration_date (int): timestamp of the date when to expiration should expire
             identity ([type], optional): Threebot me identity to use. Defaults to None.
-            expiration_provisioning ([type], optional): timestamp of the date when to reservation should be provisionned. Defaults to None.
+            expiration_provisioning (int, optional): timestamp of the date when to reservation should be provisionned. Defaults to None.
             customer_tid (int, optional): Customer threebot id. Defaults to None.
+            currencies (list, optional): list of currency asset code you want pay the reservation with. Defaults to ["TFT"]
 
         Returns:
-            int: reservation ID
+            jumpscale.clients.explorer.models.TfgridWorkloadsReservationCreate1: reservation create object
         """
         me = identity if identity else j.tools.threebot.me.default
         reservation.customer_tid = me.tid
@@ -83,6 +97,7 @@ class Zosv2:
             expiration_provisioning = now().timestamp + (3600 * 24 * 365)
 
         dr = reservation.data_reservation
+        dr.currencies = currencies
 
         dr.expiration_provisioning = expiration_provisioning
         dr.expiration_reservation = expiration_date
@@ -90,20 +105,20 @@ class Zosv2:
         dr.signing_request_provision.quorum_min = 0
 
         # make the reservation cancellable by the user that registered it
-        dr.signing_request_delete.signers.append(me.tid)
+        if me.tid not in dr.signing_request_delete.signers:
+            dr.signing_request_delete.signers.append(me.tid)
         dr.signing_request_delete.quorum_min = len(dr.signing_request_delete.signers)
 
         reservation.json = dr._json
-        reservation.customer_signature = me.nacl.sign_hex(reservation.json.encode())
+        reservation.customer_signature = me.encryptor.sign_hex(reservation.json.encode())
 
-        reservation_id = self._explorer.reservations.create(reservation)
-        return reservation_id
+        return self._explorer.reservations.create(reservation)
 
     def reservation_accept(self, reservation, identity=None):
         """A farmer need to use this function to notify he accepts to deploy the reservation on his node
 
         Args:
-            reservation ([type]): reservation object
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation object
             identity ([type], optional): Threebot me identity to use. Defaults to None.
 
         Returns:
@@ -111,7 +126,7 @@ class Zosv2:
         """
         me = identity if identity else j.tools.threebot.me.default
 
-        reservation.json = reservation.data_reservation._json
+        reservation.json = dumps(reservation.data_reservation._get_data())
         signature = me.nacl.sign_hex(reservation.json.encode())
         # TODO: missing sign_farm
         # return self._explorer.reservations.sign_farmer(reservation.id, me.tid, signature)
@@ -123,18 +138,18 @@ class Zosv2:
             reservation_id (int): reservation ID
 
         Returns:
-            list: list of worloads results
+            list: list of jumpscale.clients.explorer.models.TfgridWorkloadsReservationResult1
         """
         return self.reservation_get(reservation_id).results
 
     def reservation_get(self, reservation_id):
-        """fetch a specific reservation from BCDB
+        """fetch a specific reservation
 
         Args:
             reservation_id (int): reservation ID
 
         Returns:
-            [type]: reservation object
+            jumpscale.clients.explorer.models.TfgridWorkloadsReservation1: reservation object
         """
         return self._explorer.reservations.get(reservation_id)
 
@@ -142,11 +157,10 @@ class Zosv2:
         """Cancel a reservation.
 
            You can only cancel your own reservation
-           Once a reservation is cancelled, it is marked as to be deleted in BCDB
            the 0-OS node then detects it and will decomission the workloads from the reservation
 
         Args:
-            reservation_id ([type]): reservation ID
+            reservation_id (int): reservation ID
             identity ([type], optional): Threebot me identity to use. Defaults to None.
 
         Returns:
@@ -160,25 +174,25 @@ class Zosv2:
 
         return self._explorer.reservations.sign_delete(reservation_id=reservation_id, tid=me.tid, signature=signature)
 
-    def reservation_list(self, tid=None):
+    def reservation_list(self, tid=None, next_action=None):
         """List reservation of a threebot
 
         Args:
             tid (int, optional): Threebot id. Defaults to None.
+            next_action (str, optional): next action. Defaults to None.
 
         Returns:
             list: list of reservations
         """
         tid = tid if tid else j.tools.threebot.me.default.tid
-        result = self._explorer.reservations.list()
-        return list(filter(lambda r: r.customer_tid == tid, result))
+        return self._explorer.reservations.list(customer_tid=tid, next_action=next_action)
 
     def reservation_store(self, reservation, path):
         """Write the reservation on disk.
            Use reservation_load() to load it back
 
         Args:
-            reservation ([type]): reservation object
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation object
             path (str): path to write json data to
         """
         dump_to_file(path, reservation._ddict)
@@ -190,20 +204,64 @@ class Zosv2:
             path (str): source file
 
         Returns:
-            [type]: reservation object
+            jumpscale.clients.explorer.models.TfgridWorkloadsReservation1: reservation object
         """
         r = load_from_file(path)
-        reservation_model = j.data.schema.get_from_url("tfgrid.workloads.reservation.1")
-        return reservation_model.new(datadict=r)
+        return TfgridWorkloadsReservation1.from_dict(r)
+
+    def reservation_live(self, expired=False, cancelled=False, identity=None):
+        me = identity if identity else j.myidentities.me
+        rs = self._explorer.reservations.list()
+
+        current_time = now().timestamp
+
+        for r in rs:
+            if r.customer_tid != me.tid:
+                continue
+
+            if not expired and r.data_reservation.expiration_reservation < current_time:
+                continue
+
+            if not cancelled and str(r.next_action) == "DELETE":
+                continue
+
+            print(f"reservation {r.id}")
+
+            wid_res = {result.workload_id: result for result in r.results}
+
+            for c in r.data_reservation.containers:
+                result = wid_res.get(c.workload_id)
+                if not result:
+                    print("container: no result")
+                    continue
+
+                data = j.data.serializers.json.loads(result.data)
+                print(f"container ip4:{data['ipv4']} ip6{data['ipv6']}")
+
+            for zdb in r.data_reservation.zdbs:
+                result = wid_res.get(zdb.workload_id)
+                if not result:
+                    print("zdb: no result")
+                    continue
+
+                data = loads(result.data)
+
+            for network in r.data_reservation.networks:
+                result = wid_res.get(network.workload_id)
+                if not result:
+                    print(f"network name:{network.name}: no result")
+                    continue
+
+                print(f"network name:{network.name} iprage:{network.iprange}")
 
     def reservation_failed(self, reservation):
         """checks if reservation failed
 
         Args:
-            reservation ([type]): reservation object
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation object
 
         Returns:
-            [type]: True if any result is in error
+            bool: True if any result is in error
         """
         return any(map(lambda x: x == "ERROR", [x.state for x in reservation.results]))
 
@@ -211,10 +269,10 @@ class Zosv2:
         """checks if reservation succeeded
 
         Args:
-            reservation ([type]): reservation object
+            reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation object
 
         Returns:
-            [type]: True if all results are ok
+            bool: True if all results are ok
         """
 
         return all(map(lambda x: x == "OK", [x.state for x in reservation.results]))
@@ -228,7 +286,7 @@ class Zosv2:
             message (str, optional): message encoded in the qr code. Defaults to "Grid resources fees".
 
         Returns:
-            [type]: [description]
+            str: qrcode string representation
         """
         qrcode = f"tft:{escrow_address}?amount={total_amount}&message={message}&sender=me"
         return qrcode
@@ -251,15 +309,28 @@ class Zosv2:
         Returns:
             str: escrow encoded for QR code usage
         """
-        PAYMENT_MSG_TEMPLATE = "Grid resources fees for farmer {}"
-        results = []
-        for escrow in reservation_create_resp.escrow_information:
-            d = escrow._ddict
-            escrow_address = escrow.escrow_address
-            total_amount = escrow.total_amount / 10e6
-            farmer_id = escrow.farmer_id
-            d["total_amount"] = total_amount
-            # should we include farmer id in the message?
-            d["qrcode"] = self._escrow_to_qrcode(escrow_address, total_amount, PAYMENT_MSG_TEMPLATE.format(farmer_id))
-            results.append(d)
-        return results
+        farmer_payments = []
+        escrow_address = reservation_create_resp.escrow_information.address
+        escrow_asset = reservation_create_resp.escrow_information.asset
+        total_amount = 0
+        for detail in reservation_create_resp.escrow_information.details:
+            farmer_id = detail.farmer_id
+            farmer_amount = detail.total_amount / 10e6
+
+            total_amount += farmer_amount
+
+            farmer_payments.append({"farmer_id": farmer_id, "total_amount": farmer_amount})
+
+        qrcode = self._escrow_to_qrcode(
+            escrow_address, escrow_asset.split(":")[0], total_amount, str(reservation_create_resp.reservation_id)
+        )
+
+        info = {}
+        info["escrow_address"] = escrow_address
+        info["escrow_asset"] = escrow_asset
+        info["farmer_payments"] = farmer_payments
+        info["total_amount"] = total_amount
+        info["qrcode"] = qrcode
+        info["reservationid"] = reservation_create_resp.reservation_id
+
+        return info

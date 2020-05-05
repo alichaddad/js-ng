@@ -1,11 +1,11 @@
 from jumpscale.core.exceptions import NotFound
+from .models import TfgridPhonebookUser1
 
 
 class Users:
     def __init__(self, session, url):
         self._session = session
         self._base_url = url
-        self._model = j.data.schema.get_from_url("tfgrid.phonebook.user.1")
 
     def list(self, name=None, email=None):
         query = {}
@@ -16,15 +16,15 @@ class Users:
         resp = self._session.get(self._base_url + "/users", params=query)
         users = []
         for user_data in resp.json():
-            user = self._model.new(datadict=user_data)
+            user = TfgridPhonebookUser1.from_dict(user_data)
             users.append(user)
         return users
 
     def new(self):
-        return self._model.new()
+        return TfgridPhonebookUser1()
 
     def register(self, user):
-        resp = self._session.post(self._base_url + "/users", json=user._ddict)
+        resp = self._session.post(self._base_url + "/users", json=user._get_data())
         return resp.json()["id"]
 
     def validate(self, tid, payload, signature):
@@ -45,14 +45,14 @@ class Users:
             datatosign += user.host
         datatosign += f"{user.description}{user.pubkey}"
         signature = me.nacl.sign_hex(datatosign.encode("utf8"))
-        data = user._ddict.copy()
+        data = user._get_data().copy()
         data["sender_signature_hex"] = signature.decode("utf8")
         self._session.put(self._base_url + f"/users/{user.id}", json=data)
 
     def get(self, tid=None, name=None, email=None):
         if tid is not None:
             resp = self._session.get(self._base_url + f"/users/{tid}")
-            return self._model.new(datadict=resp.json())
+            return TfgridPhonebookUser1.from_dict(resp.json())
 
         results = self.list(name=name, email=email)
         if results:

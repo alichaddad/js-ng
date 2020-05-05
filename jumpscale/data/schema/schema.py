@@ -250,17 +250,7 @@ def parse_schema(text):
         elif line.startswith("#") or not line.strip():
             continue
         else:
-            try:
-                name, prop = _parse_prop(line)
-            except Exception as e:
-                import traceback
-
-                traceback.print_exc()
-
-                import ipdb
-
-                ipdb.set_trace()
-                print(line, e)
+            name, prop = _parse_prop(line)
             schema.props[name] = prop
     schema.url = schema.system_props["url"]
     return schema

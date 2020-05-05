@@ -1,5 +1,6 @@
 import stellar_sdk
 import math
+import time
 from jumpscale.god import j
 from urllib import parse
 from jumpscale.clients.base import Client
@@ -7,18 +8,56 @@ from jumpscale.core.base import fields
 from enum import Enum
 from .balance import Balance, EscrowAccount, AccountBalances
 from .transaction import TransactionSummary, Effect
+from stellar_sdk import Account as stellarAccount
 
-_UNLOCKHASH_TRANSACTIONS_SERVICES = {"TEST": "testnet.threefold.io", "STD": "threefold.io"}
+_THREEFOLDFOUNDATION_TFTSTELLAR_SERVICES = {"TEST": "testnet.threefold.io", "STD": "tokenservices.threefold.io"}
 _HORIZON_NETWORKS = {"TEST": "https://horizon-testnet.stellar.org", "STD": "https://horizon.stellar.org"}
 _NETWORK_PASSPHRASES = {
     "TEST": stellar_sdk.Network.TESTNET_NETWORK_PASSPHRASE,
     "STD": stellar_sdk.Network.PUBLIC_NETWORK_PASSPHRASE,
+}
+_NETWORK_KNOWN_TRUSTS = {
+    "TEST": {
+        "TFT": "GA47YZA3PKFUZMPLQ3B5F2E3CJIB57TGGU7SPCQT2WAEYKN766PWIMB3",
+        "FreeTFT": "GBLDUINEFYTF7XEE7YNWA3JQS4K2VD37YU7I2YAE7R5AHZDKQXSS2J6R",
+        "TFTA": "GB55A4RR4G2MIORJTQA4L6FENZU7K4W7ATGY6YOT2CW47M5SZYGYKSCT",
+    },
+    "STD": {
+        "TFT": "GBOVQKJYHXRR3DX6NOX2RRYFRCUMSADGDESTDNBDS6CDVLGVESRTAC47",
+        "FreeTFT": "GCBGS5TFE2BPPUVY55ZPEMWWGR6CLQ7T6P46SOFGHXEBJ34MSP6HVEUT",
+        "TFTA": "GBUT4GP5GJ6B3XW5PXENHQA7TXJI5GOPW3NF4W3ZIW6OOO4ISY6WNLN2",
+    },
+}
+_THREEFOLDFOUNDATION_TFTSTELLAR_ENDPOINT = {
+    "FUND": "/threefoldfoundation/transactionfunding_service/fund_transaction",
+    "CREATE_UNLOCK": "/threefoldfoundation/unlock_service/create_unlockhash_transaction",
+    "GET_UNLOCK": "/threefoldfoundation/unlock_service/get_unlockhash_transaction",
+    "CREATE_ACTIVATION_CODE": "/threefoldfoundation/activation_service/create_activation_code",
+    "ACTIVATE_ACCOUNT": "/threefoldfoundation/activation_service/activate_account",
 }
 
 
 class Network(Enum):
     STD = "STD"
     TEST = "TEST"
+
+
+class Account(stellarAccount):
+    def __init__(self, account_id: str, sequence: int, wallet) -> None:
+        stellarAccount.__init__(self, account_id, sequence)
+        self.wallet = wallet
+
+    def increment_sequence_number(self) -> None:
+        """
+        Increments sequence number in this object by one.
+        """
+        stellarAccount.increment_sequence_number(self)
+        self.wallet.sequence = self.sequence
+        self.wallet.sequencedate = int(time.time())
+
+    @property
+    def last_created_sequence_is_used(self):
+        return self.wallet.sequence <= self.sequence
 
 
 class Stellar(Client):
