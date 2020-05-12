@@ -195,7 +195,7 @@ class Zosv2:
             reservation (jumpscale.clients.explorer.models.TfgridWorkloadsReservation1): reservation object
             path (str): path to write json data to
         """
-        dump_to_file(path, reservation._ddict)
+        dump_to_file(path, reservation._get_data())
 
     def reservation_load(self, path):
         """load a reservation stored on disk by reservation_store
@@ -277,7 +277,7 @@ class Zosv2:
 
         return all(map(lambda x: x == "OK", [x.state for x in reservation.results]))
 
-    def _escrow_to_qrcode(self, escrow_address, total_amount, message="Grid resources fees"):
+    def _escrow_to_qrcode(self, escrow_address, escrow_asset, total_amount, message="Grid resources fees"):
         """Converts escrow info to qrcode
 
         Args:
@@ -288,7 +288,7 @@ class Zosv2:
         Returns:
             str: qrcode string representation
         """
-        qrcode = f"tft:{escrow_address}?amount={total_amount}&message={message}&sender=me"
+        qrcode = f"{escrow_asset}:{escrow_address}?amount={total_amount}&message={message}&sender=me"
         return qrcode
 
     def reservation_escrow_information_with_qrcodes(self, reservation_create_resp):

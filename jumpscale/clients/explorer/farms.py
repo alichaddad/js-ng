@@ -1,6 +1,8 @@
 from jumpscale.core.exceptions import Input, NotFound
 from .pagination import get_page, get_all
 from .models import TfgridDirectoryFarm1
+from nacl.encoding import Base64Encoder
+from .auth import HTTPSignatureAuth
 
 
 class Farms:
@@ -51,3 +53,13 @@ class Farms:
             raise Input("farms.get requires atleast farm_id or farm_name")
         resp = self._session.get(self._base_url + f"/farms/{farm_id}")
         return TfgridDirectoryFarm1.from_dict(resp.json())
+
+    def update(self, farm, identity=None):
+        me = identity or j.me
+        secret = me.encryptor.signing_key.encode(Base64Encoder)
+
+        auth = HTTPSignatureAuth(key_id=str(me.tid), secret=secret, headers=["(created)", "date", "threebot-id"])
+        headers = {"threebot-id": str(me.tid)}
+
+        self._session.put(self._base_url + f"/farms/{farm.id}", auth=auth, headers=headers, json=farm._ddict)
+        return True

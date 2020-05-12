@@ -38,7 +38,7 @@ class Users:
         return resp.json()["is_valid"]
 
     def update(self, user, identity=None):
-        me = identity if identity else j.tools.threebot.me.default
+        me = identity if identity else j.me
         datatosign = ""
         datatosign += f"{user.id}{user.name}{user.email}"
         if user.host:

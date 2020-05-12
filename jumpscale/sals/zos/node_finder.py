@@ -1,4 +1,5 @@
 import netaddr
+import requests
 from jumpscale.data.time import now
 from jumpscale.core.exceptions import Input, NotFound
 from .network import is_private
@@ -77,6 +78,12 @@ class NodeFinder:
                 if node.farm_id in not_supported_farms:
                     continue
                 farm = self._farms.get(node.farm_id)
+                try:
+                    farm = self._farms.get(node.farm_id)
+                except requests.exceptions.HTTPError:
+                    not_supported_farms.append(node.farm_id)
+                    continue
+
                 if not self.filter_farm_currency(farm, currency):
                     not_supported_farms.append(node.farm_id)
                     continue
@@ -107,7 +114,7 @@ def is_public_ip(ip, version):
 
 def filter_public_ip(node, version):
     if version not in [4, 6]:
-        raise j.exceptions.Input("ip version can only be 4 or 6")
+        raise Input("ip version can only be 4 or 6")
 
     if node.public_config and node.public_config.master:
         if version == 4:

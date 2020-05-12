@@ -57,7 +57,7 @@ class Nodes:
         if not isinstance(free, bool):
             raise Input("free must be a boolean")
 
-        me = identity if identity else j.myidentities.me
+        me = identity if identity else j.me
         secret = me.encryptor.signing_key.encode(Base64Encoder)
 
         auth = HTTPSignatureAuth(key_id=str(me.tid), secret=secret, headers=["(created)", "date", "threebot-id"])
