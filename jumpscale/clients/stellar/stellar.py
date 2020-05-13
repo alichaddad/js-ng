@@ -47,7 +47,7 @@ class Account(stellarAccount):
         stellarAccount.__init__(self, account_id, sequence)
         self.wallet = wallet
 
-    def increment_sequence_number(self) -> None:
+    def increment_sequence_number(self):
         """
         Increments sequence number in this object by one.
         """
@@ -65,57 +65,69 @@ class Stellar(Client):
     address = fields.String()
     secret = fields.String()
 
-    def __init__(self):
-        self._unlock_service_client_ = None
-
-    @property
-    def _unlock_service_client(self):
-        """
-        lazy loading of the unlock service client
-        """
-
-        if self._unlock_service_client_ is None:
-            gedis_client_name = "unlock_service_{}".format(self.network.value)
-            gedis_service = j.clients.gedis.find(gedis_client_name)
-            if gedis_service:
-                if str(gedis_service.host) != _UNLOCKHASH_TRANSACTIONS_SERVICES[self.network.value]:
-                    j.clients.gedis.delete(gedis_client_name)
-                    gedis_service = None
-
-            if not gedis_service:
-                gedis_service = j.clients.gedis.new(
-                    gedis_client_name,
-                    host=_UNLOCKHASH_TRANSACTIONS_SERVICES[self.network.value],
-                    port=8901,
-                    package_name="threefoldfoundation.unlock_service",
-                )
-
-            self._unlock_service_client_ = gedis_service.actors.unlock_service
-        return self._unlock_service_client_
-
-    def set_unlock_transaction(self, unlock_transaction):
-        """
-        Adds a xdr encoded unlocktransaction
-        Args:
-            unlock_transaction (str): xdr encoded unlocktransactionaddress of the destination
-        """
-        txe = stellar_sdk.TransactionEnvelope.from_xdr(unlock_transaction, _NETWORK_PASSPHRASES[self.network.value])
-        tx_hash = txe.hash()
-        unlock_hash = stellar_sdk.strkey.StrKey.encode_pre_auth_tx(tx_hash)
-
-        self._unlock_service_client.create_unlockhash_transaction(unlock_hash=unlock_hash, transaction_xdr=txe.to_xdr())
-
     def _get_horizon_server(self):
         return stellar_sdk.Server(horizon_url=_HORIZON_NETWORKS[self.network.value])
 
     def _get_free_balances(self, address=None):
-        if address is None:
-            address = self.address
+        address = address or self.address
         balances = AccountBalances(address)
         response = self._get_horizon_server().accounts().account_id(address).call()
         for response_balance in response["balances"]:
             balances.add_balance(Balance.from_horizon_response(response_balance))
         return balances
+
+    def load_account(self):
+        horizonServer = self._get_horizon_server()
+        saccount = horizonServer.load_account(self.address)
+        account = Account(saccount.account_id, saccount.sequence, self)
+        return account
+
+    def _get_url(self, endpoint):
+        url = _THREEFOLDFOUNDATION_TFTSTELLAR_SERVICES[self.network.value]
+        endpoint = _THREEFOLDFOUNDATION_TFTSTELLAR_ENDPOINT[endpoint]
+        return f"https://{url}{endpoint}"
+
+    def _fund_transaction(self, transaction):
+        data = {"transaction": transaction}
+        resp = j.tools.http.post(self._get_url("FUND"), json={"args": data})
+        resp.raise_for_status()
+        return resp.json()
+
+    def _create_unlockhash_transaction(self, unlock_hash, transaction_xdr):
+        data = {"unlockhash": unlock_hash, "transaction_xdr": transaction_xdr}
+        resp = j.tools.http.post(self._get_url("CREATE_UNLOCK"), json={"args": data})
+        resp.raise_for_status()
+        return resp.json()
+
+    def _get_unlockhash_transaction(self, unlockhash):
+        data = {"unlockhash": unlockhash}
+        resp = j.tools.http.post(self._get_url("GET_UNLOCK"), json={"args": data})
+        resp.raise_for_status()
+        return resp.json()
+
+    def _create_activation_code(self):
+        data = {"address": self.address}
+        resp = j.tools.http.post(self._get_url("CREATE_ACTIVATION_CODE"), json={"args": data})
+        resp.raise_for_status()
+        return resp.json()
+
+    def _activation_account(self, activation_code):
+        data = {"activation_code": activation_code}
+        resp = j.tools.http.post(self._get_url("ACTIVATE_ACCOUNT"), json={"args": data})
+        resp.raise_for_status()
+        return resp.json()
+
+    def set_unlock_transaction(self, unlock_transaction):
+        """
+        Adds a xdr encoded unlocktransaction
+        :param unlock_transaction: xdr encoded unlocktransactionaddress of the destination.
+        :type destination_address: str
+        """
+        txe = stellar_sdk.TransactionEnvelope.from_xdr(unlock_transaction, _NETWORK_PASSPHRASES[str(self.network)])
+        tx_hash = txe.hash()
+        unlock_hash = stellar_sdk.strkey.StrKey.encode_pre_auth_tx(tx_hash)
+
+        self._create_unlockhash_transaction(unlock_hash=unlock_hash, transaction_xdr=txe.to_xdr())
 
     def get_balance(self):
         """Gets balance for address
@@ -152,7 +164,11 @@ class Stellar(Client):
                     balances.append(Balance.from_horizon_response(response_balance))
 
                 escrow_account = EscrowAccount(
-                    account_id, preauth_signers, balances, _NETWORK_PASSPHRASES[self.network.value]
+                    account_id,
+                    preauth_signers,
+                    balances,
+                    _NETWORK_PASSPHRASES[self.network.value],
+                    self._get_unlockhash_transaction,
                 )
                 escrow_accounts.append(escrow_account)
         return escrow_accounts
@@ -166,11 +182,11 @@ class Stellar(Client):
     def _unlock_account(self, escrow_account):
         submitted_unlock_transactions = 0
         for unlockhash in escrow_account.unlockhashes:
-            unlockhash_transation = self._unlock_service_client.get_unlockhash_transaction(unlockhash=unlockhash)
+            unlockhash_transation = self._get_unlockhash_transaction(unlockhash=unlockhash)
             if unlockhash_transation is None:
                 return
-            j.logger.info(unlockhash_transation.transaction_xdr)
-            self._get_horizon_server().submit_transaction(unlockhash_transation.transaction_xdr)
+            j.logger.info(unlockhash_transation["transaction_xdr"])
+            self._get_horizon_server().submit_transaction(unlockhash_transation["transaction_xdr"])
             submitted_unlock_transactions += 1
 
         if submitted_unlock_transactions == len(escrow_account.unlockhashes):
@@ -215,12 +231,16 @@ class Stellar(Client):
         if self.network.value != "TEST":
             raise Exception("Account activation through friendbot is only available on testnet")
 
-        try:
-            resp = j.tools.http.get("https://friendbot.stellar.org/?addr=" + self.address)
-            if resp.getcode() == 200:
-                j.logger.info("account with address: {} funded through friendbot".format(self.address))
-        except j.tools.http.HTTPError:
-            pass
+        resp = j.tools.http.get("https://friendbot.stellar.org/?addr=" + self.address)
+        resp.raise_for_status()
+        j.logger.info("account with address: {} funded through friendbot".format(self.address))
+
+    def activate_through_threefold_service(self):
+        """
+        Activate your weallet through threefold services
+        """
+        activationdata = self._create_activation_code()
+        self._activation_account(activationdata["activation_code"])
 
     def activate_account(self, destination_address, starting_balance="12.50"):
         """Activates another account
@@ -230,21 +250,21 @@ class Stellar(Client):
             starting_balance (str, optional): the balance that the destination address will start with. Must be a positive integer expressed as a string. Defaults to "12.50".
         """
         server = self._get_horizon_server()
-        source = stellar_sdk.Keypair.from_secret(self.secret)
+        source_keypair = stellar_sdk.Keypair.from_secret(self.secret)
 
-        source_account = server.load_account(account_id=source.public_key)
+        source_account = server.load_account()
 
         base_fee = server.fetch_base_fee()
         transaction = (
             stellar_sdk.TransactionBuilder(
                 source_account=source_account,
-                network_passphrase=_NETWORK_PASSPHRASES[str(self.network)],
+                network_passphrase=_NETWORK_PASSPHRASES[self.network.value],
                 base_fee=base_fee,
             )
             .append_create_account_op(destination=destination_address, starting_balance=starting_balance)
             .build()
         )
-        transaction.sign(source)
+        transaction.sign(source_keypair)
         try:
             response = server.submit_transaction(transaction)
             j.logger.info("Transaction hash: {}".format(response["hash"]))
@@ -260,6 +280,17 @@ class Stellar(Client):
             secret (str, optional): Secret to use will use instance property if empty. Defaults to None.
         """
         self._change_trustline(asset_code, issuer, secret=secret)
+
+    def add_known_trustline(self, asset_code):
+        """Will add a trustline known by threefold for chosen asset_code
+
+        Args:
+            asset_code (str): code of the asset. For example: 'BTC', 'TFT', ...
+        """
+        issuer = _NETWORK_KNOWN_TRUSTS.get(str(self.network), {}).get(asset_code)
+        if not issuer:
+            raise j.exceptions.NotFound(f"We do not provide a known issuers for {asset_code} on network {self.network}")
+        self._change_trustline(asset_code, issuer)
 
     def delete_trustline(self, asset_code, issuer, secret=None):
         """Deletes a trustline
@@ -281,8 +312,7 @@ class Stellar(Client):
             secret (str, optional): Secret to use will use instance property if empty. Defaults to None.
         """
         # if no secret is provided we assume we change trustlines for this account
-        if secret is None:
-            secret = self.secret
+        secret = secret or self.secret
 
         server = self._get_horizon_server()
         source_keypair = stellar_sdk.Keypair.from_secret(secret)
@@ -294,7 +324,7 @@ class Stellar(Client):
         transaction = (
             stellar_sdk.TransactionBuilder(
                 source_account=source_account,
-                network_passphrase=_NETWORK_PASSPHRASES[str(self.network)],
+                network_passphrase=_NETWORK_PASSPHRASES[self.network.value],
                 base_fee=base_fee,
             )
             .append_change_trust_op(asset_issuer=issuer, asset_code=asset_code, limit=limit)
@@ -311,7 +341,17 @@ class Stellar(Client):
             j.logger.debug(e)
             raise e
 
-    def transfer(self, destination_address, amount, asset="XLM", locked_until=None, memo_text=None, memo_hash=None):
+    def transfer(
+        self,
+        destination_address,
+        amount,
+        asset="XLM",
+        locked_until=None,
+        memo_text=None,
+        memo_hash=None,
+        fund_transaction=True,
+        from_address=None,
+    ):
         """Transfer assets to another address
 
         Args:
@@ -322,6 +362,8 @@ class Stellar(Client):
             locked_until (float, optional): epoch timestamp indicating until when the tokens  should be locked. Defaults to None.
             memo_text (Union[str, bytes], optional): memo text to add to the transaction, a string encoded using either ASCII or UTF-8, up to 28-bytes long. Defaults to None.
             memo_hash (Union[str, bytes], optional): memo hash to add to the transaction, A 32 byte hash. Defaults to None.
+            fund_transaction (bool, optional): use the threefoldfoundation transaction funding service. Defautls to True.
+            from_address (str, optional): Use a different address to send the tokens from, useful in multisig use cases. Defaults to None.
 
         Raises:
             Exception: If asset not in correct format
@@ -341,14 +383,25 @@ class Stellar(Client):
             issuer = assetStr[1]
 
         if locked_until is not None:
-            return self._transfer_locked_tokens(destination_address, amount, asset, issuer, locked_until)
+            return self._transfer_locked_tokens(
+                destination_address,
+                amount,
+                asset,
+                issuer,
+                locked_until,
+                memo_text=memo_text,
+                memo_hash=memo_hash,
+                fund_transaction=fund_transaction,
+                from_address=from_address,
+            )
 
-        server = self._get_horizon_server()
-        source_keypair = stellar_sdk.Keypair.from_secret(self.secret)
-        source_public_key = source_keypair.public_key
-        source_account = server.load_account(source_public_key)
+        horizon_server = self._get_horizon_server()
 
-        base_fee = server.fetch_base_fee()
+        base_fee = horizon_server.fetch_base_fee()
+        if from_address:
+            source_account = horizon_server.load_account(from_address)
+        else:
+            source_account = self.load_account()
 
         transaction_builder = stellar_sdk.TransactionBuilder(
             source_account=source_account,
@@ -356,7 +409,11 @@ class Stellar(Client):
             base_fee=base_fee,
         )
         transaction_builder.append_payment_op(
-            destination=destination_address, amount=str(amount), asset_code=asset, asset_issuer=issuer
+            destination=destination_address,
+            amount=str(amount),
+            asset_code=asset,
+            asset_issuer=issuer,
+            source=source_account.account_id,
         )
         transaction_builder.set_timeout(30)
         if memo_text is not None:
@@ -365,23 +422,35 @@ class Stellar(Client):
             transaction_builder.add_hash_memo(memo_hash)
 
         transaction = transaction_builder.build()
+        transaction = transaction.to_xdr()
 
-        transaction.sign(source_keypair)
+        if asset == "TFT" or asset == "FreeTFT":
+            if fund_transaction:
+                transaction = self._fund_transaction(transaction=transaction)
+                transaction = transaction["transaction_xdr"]
+
+        transaction = stellar_sdk.TransactionEnvelope.from_xdr(transaction, _NETWORK_PASSPHRASES[self.network.value])
+
+        my_keypair = stellar_sdk.Keypair.from_secret(self.secret)
+        transaction.sign(my_keypair)
 
         try:
-            response = server.submit_transaction(transaction)
+            response = horizon_server.submit_transaction(transaction)
             tx_hash = response["hash"]
             j.logger.info("Transaction hash: {}".format(tx_hash))
             return tx_hash
         except stellar_sdk.exceptions.BadRequestError as e:
-            for op in e.extras["result_codes"]["operations"]:
-                if op == "op_underfunded":
-                    raise e
-                # if op_bad_auth is returned then we assume the transaction needs more signatures
-                # so we return the transaction as xdr
-                elif op == "op_bad_auth":
-                    j.logger.info("Transaction might need additional signatures in order to send")
-                    return transaction.to_xdr()
+            result_codes = e.extras.get("result_codes")
+            operations = result_codes.get("operations")
+            if operations is not None:
+                for op in operations:
+                    if op == "op_underfunded":
+                        raise e
+                    # if op_bad_auth is returned then we assume the transaction needs more signatures
+                    # so we return the transaction as xdr
+                    elif op == "op_bad_auth":
+                        j.logger.info("Transaction might need additional signatures in order to send")
+                        return transaction.to_xdr()
             raise e
 
     def list_transactions(self, address=None):
@@ -393,8 +462,7 @@ class Stellar(Client):
         Returns:
             list: list of TransactionSummary objects
         """
-        if address is None:
-            address = self.address
+        address = address or self.address
         tx_endpoint = self._get_horizon_server().transactions()
         tx_endpoint.for_account(address)
         tx_endpoint.include_failed(False)
@@ -423,8 +491,7 @@ class Stellar(Client):
         Returns:
             list: list of Effect objects
         """
-        if address is None:
-            address = self.address
+        address = address or self.address
         effects = []
         endpoint = self._get_horizon_server().effects()
         endpoint.for_transaction(transaction_hash)
@@ -443,7 +510,18 @@ class Stellar(Client):
                     effects.append(Effect.from_horizon_response(response_effect))
         return effects
 
-    def _transfer_locked_tokens(self, destination_address, amount, asset_code, asset_issuer, unlock_time):
+    def _transfer_locked_tokens(
+        self,
+        destination_address,
+        amount,
+        asset_code,
+        asset_issuer,
+        unlock_time,
+        memo_text=None,
+        memo_hash=None,
+        fund_transaction=True,
+        from_address=None,
+    ):
         """Transfer locked assets to another address
 
         Args:
@@ -452,32 +530,32 @@ class Stellar(Client):
             asset_code (str): asset to transfer
             asset_issuer (str): if the asset_code is different from 'XlM', the issuer address
             unlock_time (float):  an epoch timestamp indicating when the funds should be unlocked
+            memo_text (Union[str, bytes], optional): memo text to add to the transaction, a string encoded using either ASCII or UTF-8, up to 28-bytes long
+            memo_hash (Union[str, bytes], optional): memo hash to add to the transaction, A 32 byte hash
+            fund_transaction (bool, optional): use the threefoldfoundation transaction funding service.Defaults to True.
+            from_address (str, optional): Use a different address to send the tokens from, useful in multisig use cases. Defaults to None.
 
         Returns:
             [type]: [description]
         """
 
-        from_kp = stellar_sdk.Keypair.from_secret(self.secret)
         unlock_time = math.ceil(unlock_time)
-        j.logger.info(
-            f"Sending {amount} {asset_code} from {from_kp.public_key} to {destination_address} locked until {unlock_time}"
-        )
 
-        j.logger.info("Creating escrow account")
+        self._log_info("Creating escrow account")
         escrow_kp = stellar_sdk.Keypair.random()
 
         # minimum account balance as described at https://www.stellar.org/developers/guides/concepts/fees.html#minimum-account-balance
-        server = self._get_horizon_server()
-        base_fee = server.fetch_base_fee()
+        horizon_server = self._get_horizon_server()
+        base_fee = horizon_server.fetch_base_fee()
         base_reserve = 0.5
         minimum_account_balance = (2 + 1 + 3) * base_reserve  # 1 trustline and 3 signers
         required_XLM = minimum_account_balance + base_fee * 0.0000001 * 3
 
-        j.logger.info("Activating escrow account")
+        self._log_info("Activating escrow account")
         self.activate_account(escrow_kp.public_key, str(math.ceil(required_XLM)))
 
         if asset_code != "XLM":
-            j.logger.info("Adding trustline to escrow account")
+            self._log_info("Adding trustline to escrow account")
             self.add_trustline(asset_code, asset_issuer, escrow_kp.secret)
 
         preauth_tx = self._create_unlock_transaction(escrow_kp, unlock_time)
@@ -485,13 +563,21 @@ class Stellar(Client):
 
         # save the preauth transaction in our unlock service
         unlock_hash = stellar_sdk.strkey.StrKey.encode_pre_auth_tx(preauth_tx_hash)
-        self._unlock_service_client.create_unlockhash_transaction(unlock_hash, preauth_tx.to_xdr())
+        self._create_unlockhash_transaction(unlock_hash=unlock_hash, transaction_xdr=preauth_tx.to_xdr())
 
-        self._set_account_signers(escrow_kp.public_key, destination_address, preauth_tx_hash, escrow_kp)
-        j.logger.info("Unlock Transaction:")
-        j.logger.info(preauth_tx.to_xdr())
+        self._set_escrow_account_signers(escrow_kp.public_key, destination_address, preauth_tx_hash, escrow_kp)
+        self._log_info("Unlock Transaction:")
+        self._log_info(preauth_tx.to_xdr())
 
-        self.transfer(escrow_kp.public_key, amount, asset_code + ":" + asset_issuer)
+        self.transfer(
+            escrow_kp.public_key,
+            amount,
+            asset_code + ":" + asset_issuer,
+            memo_text=memo_text,
+            memo_hash=memo_hash,
+            fund_transaction=fund_transaction,
+            from_address=from_address,
+        )
         return preauth_tx.to_xdr()
 
     def _create_unlock_transaction(self, escrow_kp, unlock_time):
@@ -509,7 +595,10 @@ class Stellar(Client):
 
     def _set_account_signers(self, address, public_key_signer, preauth_tx_hash, signer_kp):
         server = self._get_horizon_server()
-        account = server.load_account(address)
+        if address == self.address:
+            account = self.load_account()
+        else:
+            account = server.load_account(address)
         tx = (
             stellar_sdk.TransactionBuilder(account)
             .append_pre_auth_tx_signer(preauth_tx_hash, 1)
@@ -523,7 +612,9 @@ class Stellar(Client):
         j.logger.info(response)
         j.logger.info(f"Set the signers of {address} to {public_key_signer} and {preauth_tx_hash}")
 
-    def modify_signing_requirements(self, public_keys_signers, signature_count, low_treshold=1, high_treshold=2):
+    def modify_signing_requirements(
+        self, public_keys_signers, signature_count, low_treshold=1, high_treshold=2, master_weight=2
+    ):
         """modify_signing_requirements sets to amount of signatures required for the creation of multisig account. It also adds
            the public keys of the signer to this account
 
@@ -532,23 +623,19 @@ class Stellar(Client):
             signature_count (int): amount of signatures requires to transfer funds
             low_treshold (int, optional): amount of signatures required for low security operations (transaction processing, allow trust, bump sequence). Defaults to 1.
             high_treshold (int, optional): amount of signatures required for high security operations (set options, account merge). Defaults to 2.
-
-        Raises:
-            Exception: if number of public keys not same as signature_count - 1
+            master_weight (int, optional): A number from 0-255 (inclusive) representing the weight of the master key. If the weight of the master key is updated to 0, it is effectively disabled. Defaults to 2.
         """
-        if len(public_keys_signers) != signature_count - 1:
-            raise Exception(
-                "Number of public_keys must be 1 less than the signature count in order to set the signature count"
-            )
-
         server = self._get_horizon_server()
-        account = server.load_account(self.address)
+        account = self.load_account()
         source_keypair = stellar_sdk.Keypair.from_secret(self.secret)
 
         transaction_builder = stellar_sdk.TransactionBuilder(account)
         # set the signing options
         transaction_builder.append_set_options_op(
-            low_threshold=low_treshold, med_threshold=signature_count, high_threshold=high_treshold
+            low_threshold=low_treshold,
+            med_threshold=signature_count,
+            high_threshold=high_treshold,
+            master_weight=master_weight,
         )
 
         # For every public key given, add it as a signer to this account
@@ -593,7 +680,7 @@ class Stellar(Client):
             public_key_signer (str): public key of an account
         """
         server = self._get_horizon_server()
-        account = server.load_account(self.address)
+        account = self.load_account()
         tx = stellar_sdk.TransactionBuilder(account).append_ed25519_public_key_signer(public_key_signer, 0).build()
 
         source_keypair = stellar_sdk.Keypair.from_secret(self.secret)

@@ -34,25 +34,22 @@ class Balance:
 
 
 class EscrowAccount:
-    def __init__(self, address, unlockhashes, balances, network_passphrase):
+    def __init__(self, address, unlockhashes, balances, network_passphrase, _get_unlockhash_transaction):
         self.address = address
         self.unlockhashes = unlockhashes
         self.balances = balances
         self.network_passphrase = network_passphrase
+        self._get_unlockhash_transaction = _get_unlockhash_transaction
         self.unlock_time = None
         self._set_unlock_conditions()
 
     def _set_unlock_conditions(self):
-        unlockhash_tx_model = j.threebot.packages.threefoldfoundation.unlock_service.bcdb.model_get(
-            url="threefoldfoundation.unlock_service.unlockhash_transaction"
-        )
         for unlockhash in self.unlockhashes:
-            unlockhash_tx = unlockhash_tx_model.find(unlockhash=unlockhash)
-            if len(unlockhash_tx) is 0:
+            unlockhash_tx = self._get_unlockhash_transaction(unlockhash=unlockhash)
+            if unlockhash_tx is None:
                 return
 
-            unlockhash_tx = unlockhash_tx[0]
-            txe = TransactionEnvelope.from_xdr(unlockhash_tx.transaction_xdr, self.network_passphrase)
+            txe = TransactionEnvelope.from_xdr(unlockhash_tx["transaction_xdr"], self.network_passphrase)
             tx = txe.transaction
             if tx.time_bounds is not None:
                 self.unlock_time = tx.time_bounds.min_time
