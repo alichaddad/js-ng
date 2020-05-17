@@ -33,6 +33,12 @@ types_map = {
 
 def get_prop_line(prop):
     prop_type = prop.prop_type
+    if prop_type == "B":
+        if prop.defaultvalue.lower() == "true":
+            prop.defaultvalue = "True"
+        elif prop.defaultvalue.lower() == "false":
+            prop.defaultvalue = "False"
+
     python_type = types_map.get(prop_type)
     line = f"{prop.name} = "
     # print(f"\n\n{prop.name} => {prop} \n\n")
