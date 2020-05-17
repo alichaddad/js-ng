@@ -3,7 +3,7 @@ from jumpscale.god import j
 
 
 def pascalify_name(name):
-    return "".join([x.capitalize() for x in name.split("-")])
+    return "".join([x.capitalize() for x in name.replace("_", "-").split("-")])
 
 
 class Property:
