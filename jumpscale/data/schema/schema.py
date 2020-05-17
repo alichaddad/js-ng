@@ -2,6 +2,10 @@ import re
 from jumpscale.god import j
 
 
+def pascalify_name(name):
+    return "".join([x.capitalize() for x in name.split("-")])
+
+
 class Property:
     def __init__(self):
         self.index = False
@@ -41,12 +45,8 @@ class Schema:
         enums = []
         for prop_name, prop in self.props.items():
             if prop.prop_type == "E":
-                enums.append(
-                    {
-                        "name": prop.name.capitalize(),
-                        "vals": [x.strip().capitalize() for x in prop.defaultvalue.split(",")],
-                    }
-                )
+                cleanname = pascalify_name(prop.name)
+                enums.append({"name": cleanname, "vals": [pascalify_name(x) for x in prop.defaultvalue.split(",")]})
         return enums
 
     def get_classes_required(self):
