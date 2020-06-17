@@ -3,6 +3,9 @@ import re
 import time
 import sys
 import traceback
+import argparse
+import shutil
+import requests
 
 import inspect
 import cgi
@@ -15,6 +18,8 @@ from prompt_toolkit.validation import Validator, ValidationError
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import HTML
 from jumpscale import threesdk
+from jumpscale.clients.docker.docker import DockerClient
+from jumpscale.threesdk.threebot import ThreeBot, DEFAULT_IMAGE
 
 
 BASE_CONFIG_DIR = os.path.join(os.environ.get("HOME", "/root"), ".jsng")
@@ -32,10 +37,36 @@ style = Style.from_dict(
 )
 
 
+def get_binary_link():
+    # TODO returns a hardcoded value for now
+    pass
+
+
+def update():
+    docker_client = DockerClient()
+    docker_client.client.images.pull(DEFAULT_IMAGE, "latest")
+    for container in docker_client.client.containers.list(filters={"ancestor": DEFAULT_IMAGE}):
+        ThreeBot.delete(container.name)
+        ThreeBot.install(container.name)
+
+    binary_link = get_binary_link()
+    tmp_file = "/tmp/usershell"
+    with requests.get(binary_link, allow_redirects=True, stream=True) as rf:
+        with open(tmp_file, "wb") as f:
+            f.write(r.raw)
+    os.chmod(tmp_file, 0o775)
+    bin_file = sys.argv[0]
+    shutil.copy(bin_file, f"{tmp_file}.bck")
+    try:
+        shutil.copy(tmp_file, bin_file)
+    except Exception:
+        raise RuntimeError("Couldn't update binary")
+    finally:
+        os.remove(tmp_file)
+
+
 def print_error(error):
-    print_formatted_text(
-        HTML("<ansired>{}</ansired>".format(cgi.html.escape(str(error))))
-    )
+    print_formatted_text(HTML("<ansired>{}</ansired>".format(cgi.html.escape(str(error)))))
 
 
 def partition_line(line):
@@ -50,12 +81,8 @@ def partition_line(line):
 
 
 def noexpert_error(error):
-    reports_location = (
-        f"{os.environ.get('HOME', os.environ.get('USERPROFILE', ''))}/sandbox/reports"
-    )
-    error_file_location = (
-        f"{reports_location}/jsxreport_{time.strftime('%d%H%M%S')}.log"
-    )
+    reports_location = f"{os.environ.get('HOME', os.environ.get('USERPROFILE', ''))}/sandbox/reports"
+    error_file_location = f"{reports_location}/jsxreport_{time.strftime('%d%H%M%S')}.log"
     if not os.path.exists(reports_location):
         os.makedirs(reports_location)
     with open(error_file_location, "w") as f:
@@ -187,15 +214,12 @@ class Shell(Validator):
 
     def prompt(self, msg):
         return self._prompt.prompt(
-            msg,
-            completer=self,
-            validator=self,
-            style=style,
-            bottom_toolbar=self.bottom_toolbar,
+            msg, completer=self, validator=self, style=style, bottom_toolbar=self.bottom_toolbar,
         )
 
 
 def run():
+
     shell = Shell()
     shell.make_prompt()
 
